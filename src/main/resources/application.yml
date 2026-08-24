@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: myTradingPlatform
+
+#AngelOne Properties
+angelone:
+  api-key: ${ANGELONE_API_KEY}
+  client-code: ${ANGELONE_CLIENT_CODE}
+  password: ${ANGELONE_PASSWORD}
+  totp-secret: ${ANGELONE_TOTP_SECRET}
