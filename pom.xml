@@ -64,10 +64,22 @@
 			<scope>test</scope>
 		</dependency>
 
-<!--		Angel One Dependency-->
+<!--&lt;!&ndash;		Websocket for live stream >-->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+		<!--		Websocket -->
+
+<!--Upstok Dependency Latest 20Aug-2026-->
+		<dependency>
+			<groupId>com.upstox.api</groupId>
+			<artifactId>upstox-java-sdk</artifactId>
+			<version>1.28</version>
+		</dependency>
+		<!--Upstok Dependency Latest 20Aug-2026-->
 
 
-<!--		Angel One Dependency-->
 	</dependencies>
 
 	<build>
