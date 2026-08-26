@@ -3,12 +3,14 @@ package com.Dashboard.myTradingPlatform.market.model;
 import java.math.BigDecimal;
 import java.time.Instant;
 
-public record MarketData(
+public record MarketCandle(
         String instrumentKey,
-        BigDecimal lastPrice,
-        Long lastTradedQuantity,
+        String timeframe,
+        BigDecimal open,
+        BigDecimal high,
+        BigDecimal low,
+        BigDecimal close,
         Long volume,
-        BigDecimal previousClose,
         Instant timestamp
 ) {
 }

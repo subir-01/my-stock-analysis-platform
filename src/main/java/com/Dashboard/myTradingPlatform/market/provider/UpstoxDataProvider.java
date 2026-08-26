@@ -14,6 +14,8 @@ public class UpstoxDataProvider implements MarketDataProvider {
 
     private final UpstoxClient upstoxClient;
     private final ObjectMapper objectMapper;
+
+
     public UpstoxDataProvider(UpstoxClient upstoxClient, ObjectMapper objectMapper) {
         this.upstoxClient = upstoxClient;
         this.objectMapper = objectMapper;
