@@ -16,7 +16,6 @@ public class MarketCandleService {
     }
 
     public void processCandle(MarketCandle candle) {
-
         log.info(
                 "Processing candle: instrument={}, timeframe={}, close={}",
                 candle.instrumentKey(),
@@ -24,11 +23,8 @@ public class MarketCandleService {
                 candle.close()
         );
 
-        marketCandleCache.update(candle);
+        marketCandleCache.put(candle);
 
-        log.debug(
-                "Candle cached: {}",
-                candle
-        );
+        log.debug("Candle cached: {}", candle);
     }
 }

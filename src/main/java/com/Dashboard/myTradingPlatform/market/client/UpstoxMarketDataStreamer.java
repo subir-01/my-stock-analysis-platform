@@ -12,31 +12,34 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import com.Dashboard.myTradingPlatform.market.service.MarketCandleService;
 import java.util.Set;
+import com.Dashboard.myTradingPlatform.market.service.InstrumentSubscriptionService;
 
 @Component
 @Slf4j
 public class UpstoxMarketDataStreamer {
 
-    private static final String RELIANCE = "NSE_EQ|INE002A01018";
+
 
     private final MarketDataStreamerV3 streamer;
     private final UpstoxMarketDataMapper marketDataMapper;
     private final UpstoxMarketCandleMapper marketCandleMapper;
     private final MarketDataService marketDataService;
     private final MarketCandleService marketCandleService;
+    private final InstrumentSubscriptionService instrumentSubscriptionService;
 
 
     public UpstoxMarketDataStreamer(
             ApiClient apiClient,
             UpstoxMarketDataMapper marketDataMapper,
             UpstoxMarketCandleMapper marketCandleMapper,
-            MarketDataService marketDataService, MarketCandleService marketCandleService) {
+            MarketDataService marketDataService, MarketCandleService marketCandleService, InstrumentSubscriptionService instrumentSubscriptionService) {
 
         this.streamer = new MarketDataStreamerV3(apiClient);
         this.marketDataMapper = marketDataMapper;
         this.marketCandleMapper = marketCandleMapper;
         this.marketDataService = marketDataService;
         this.marketCandleService = marketCandleService;
+        this.instrumentSubscriptionService = instrumentSubscriptionService;
 
         streamer.setOnMarketUpdateListener(marketUpdate -> {
             log.info("Market update received from Upstox");
@@ -49,6 +52,7 @@ public class UpstoxMarketDataStreamer {
 
             marketUpdate.getFeeds().forEach((instrumentKey, feed) -> {
                 log.debug("Processing feed for instrument: {}", instrumentKey);
+                log.info("Instrument feed details: {}", feed);
 
                 MarketData marketData = marketDataMapper.toMarketData(
                         instrumentKey,
@@ -101,9 +105,24 @@ public class UpstoxMarketDataStreamer {
     }
 
     private void subscribeToMarketData() {
-        log.info("Subscribing to market data for: {}", RELIANCE);
 
-        Set<String> instrumentKeys = Set.of(RELIANCE);
+        Set<String> instrumentKeys =
+                instrumentSubscriptionService.getInstrumentKeys();
+
+        if (instrumentKeys.isEmpty()) {
+            log.warn("No instruments available for market data subscription");
+            return;
+        }
+
+        log.info(
+                "Subscribing to {} instruments",
+                instrumentKeys.size()
+        );
+
+        log.debug(
+                "Instrument keys for subscription: {}",
+                instrumentKeys
+        );
 
         streamer.subscribe(
                 instrumentKeys,

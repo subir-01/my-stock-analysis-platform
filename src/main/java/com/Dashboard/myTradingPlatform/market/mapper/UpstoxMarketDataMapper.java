@@ -12,23 +12,27 @@ public class UpstoxMarketDataMapper {
 
     public MarketData toMarketData(
             String instrumentKey,
-            MarketUpdateV3.Feed feed
-    ) {
+            MarketUpdateV3.Feed feed) {
 
         if (feed == null || feed.getFullFeed() == null) {
             return null;
         }
 
-        MarketUpdateV3.MarketFullFeed marketFullFeed =
-                feed.getFullFeed().getMarketFF();
+        MarketUpdateV3.LTPC ltpc = null;
 
-        if (marketFullFeed == null ||
-                marketFullFeed.getLtpc() == null) {
-            return null;
+        if (feed.getFullFeed().getMarketFF() != null) {
+            ltpc = feed.getFullFeed()
+                    .getMarketFF()
+                    .getLtpc();
+        } else if (feed.getFullFeed().getIndexFF() != null) {
+            ltpc = feed.getFullFeed()
+                    .getIndexFF()
+                    .getLtpc();
         }
 
-        MarketUpdateV3.LTPC ltpc =
-                marketFullFeed.getLtpc();
+        if (ltpc == null) {
+            return null;
+        }
 
         return new MarketData(
                 instrumentKey,

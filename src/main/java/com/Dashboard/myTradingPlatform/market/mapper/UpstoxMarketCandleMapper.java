@@ -14,8 +14,7 @@ public class UpstoxMarketCandleMapper {
 
     public List<MarketCandle> toMarketCandles(
             String instrumentKey,
-            MarketUpdateV3.Feed feed
-    ) {
+            MarketUpdateV3.Feed feed) {
 
         List<MarketCandle> candles = new ArrayList<>();
 
@@ -23,17 +22,23 @@ public class UpstoxMarketCandleMapper {
             return candles;
         }
 
-        MarketUpdateV3.MarketFullFeed marketFullFeed =
-                feed.getFullFeed().getMarketFF();
+        MarketUpdateV3.MarketOHLC marketOHLC = null;
 
-        if (marketFullFeed == null ||
-                marketFullFeed.getMarketOHLC() == null ||
-                marketFullFeed.getMarketOHLC().getOhlc() == null) {
+        if (feed.getFullFeed().getMarketFF() != null) {
+            marketOHLC = feed.getFullFeed()
+                    .getMarketFF()
+                    .getMarketOHLC();
+        } else if (feed.getFullFeed().getIndexFF() != null) {
+            marketOHLC = feed.getFullFeed()
+                    .getIndexFF()
+                    .getMarketOHLC();
+        }
+
+        if (marketOHLC == null || marketOHLC.getOhlc() == null) {
             return candles;
         }
 
-        for (MarketUpdateV3.OHLC ohlc :
-                marketFullFeed.getMarketOHLC().getOhlc()) {
+        for (MarketUpdateV3.OHLC ohlc : marketOHLC.getOhlc()) {
 
             MarketCandle candle = new MarketCandle(
                     instrumentKey,

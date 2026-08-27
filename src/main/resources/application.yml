@@ -2,9 +2,21 @@ spring:
   application:
     name: myTradingPlatform
 
-#AngelOne Properties
+# AngelOne Properties
 angelone:
   api-key: ${ANGELONE_API_KEY}
   client-code: ${ANGELONE_CLIENT_CODE}
   password: ${ANGELONE_PASSWORD}
   totp-secret: ${ANGELONE_TOTP_SECRET}
+
+# Upstox Properties
+upstox:
+  access-token: ${UPSTOX_ACCESS_TOKEN}
+
+# Actuator
+management:
+  endpoints:
+    enabled-by-default: false
+  metrics:
+    enable:
+      all: false

@@ -32,12 +32,8 @@ public class MarketDataService {
 
         marketDataCache.update(marketData);
 
-        eventPublisher.publishEvent(
-                new MarketDataEvent(marketData)
-        );
-
         log.debug(
-                "Market data cached and event published: {}",
+                "Market data cached: {}",
                 marketData
         );
     }
