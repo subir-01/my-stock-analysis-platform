@@ -2,6 +2,20 @@ spring:
   application:
     name: myTradingPlatform
 
+  datasource:
+    url: jdbc:mysql://localhost:3307/my_trading_platform?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
 # AngelOne Properties
 angelone:
   api-key: ${ANGELONE_API_KEY}

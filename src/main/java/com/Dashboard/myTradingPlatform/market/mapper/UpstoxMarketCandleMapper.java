@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Component
@@ -53,6 +54,10 @@ public class UpstoxMarketCandleMapper {
 
             candles.add(candle);
         }
+
+        candles.sort(
+                Comparator.comparing(MarketCandle::timestamp)
+        );
 
         return candles;
     }
