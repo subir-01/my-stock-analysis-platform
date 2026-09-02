@@ -13,6 +13,11 @@ public class ResistanceCalculator {
             List<MarketCandle> candles,
             BigDecimal currentPrice) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         */
         if (candles == null
                 || candles.size() < 3
                 || currentPrice == null) {
@@ -23,11 +28,22 @@ public class ResistanceCalculator {
         BigDecimal resistance = null;
 
         /*
-         * We need one candle before and one candle
-         * after the current candle to identify
-         * a swing high.
+         * =====================================================
+         * FIND SWING HIGHS
+         * =====================================================
+         *
+         * A candle is treated as a swing high when:
+         *
+         * current high >= previous high
+         * AND
+         * current high >= next high
+         *
+         * From all swing highs above the current price,
+         * we select the closest one.
          */
-        for (int i = 1; i < candles.size() - 1; i++) {
+        for (int i = 1;
+             i < candles.size() - 1;
+             i++) {
 
             MarketCandle previous =
                     candles.get(i - 1);
@@ -40,8 +56,12 @@ public class ResistanceCalculator {
 
             if (previous == null
                     || current == null
-                    || next == null
-                    || previous.high() == null
+                    || next == null) {
+
+                continue;
+            }
+
+            if (previous.high() == null
                     || current.high() == null
                     || next.high() == null) {
 
@@ -58,46 +78,25 @@ public class ResistanceCalculator {
                     next.high();
 
             /*
-             * Swing High:
-             *
-             * previous high
-             *       ↑
-             *
-             * current high
-             *       ↑
-             *      HIGH
-             *
-             * next high
+             * Check swing-high structure.
              */
             boolean isSwingHigh =
                     currentHigh.compareTo(previousHigh) >= 0
                             && currentHigh.compareTo(nextHigh) >= 0;
 
-            /*
-             * Resistance must be above
-             * the current market price.
-             */
-            boolean aboveCurrentPrice =
-                    currentHigh.compareTo(currentPrice) > 0;
-
-            if (!isSwingHigh || !aboveCurrentPrice) {
+            if (!isSwingHigh) {
                 continue;
             }
 
             /*
-             * Select the closest resistance above
-             * the current market price.
-             *
-             * Example:
-             *
-             * Current price = 1287
-             *
-             * Swing highs:
-             * 1295
-             * 1305
-             * 1320
-             *
-             * Resistance = 1295
+             * Resistance must be above current price.
+             */
+            if (currentHigh.compareTo(currentPrice) <= 0) {
+                continue;
+            }
+
+            /*
+             * Select nearest resistance.
              */
             if (resistance == null
                     || currentHigh.compareTo(resistance) < 0) {

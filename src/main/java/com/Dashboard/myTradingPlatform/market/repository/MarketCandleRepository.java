@@ -10,6 +10,12 @@ import java.util.Optional;
 public interface MarketCandleRepository
         extends JpaRepository<MarketCandleEntity, Long> {
 
+    boolean existsByInstrumentKeyAndTimeframeAndTimestamp(
+            String instrumentKey,
+            String timeframe,
+            Instant timestamp
+    );
+
     Optional<MarketCandleEntity>
     findTopByInstrumentKeyAndTimeframeOrderByTimestampDesc(
             String instrumentKey,
@@ -30,9 +36,8 @@ public interface MarketCandleRepository
             Instant to
     );
 
-    boolean existsByInstrumentKeyAndTimeframeAndTimestamp(
+    long countByInstrumentKeyAndTimeframe(
             String instrumentKey,
-            String timeframe,
-            Instant timestamp
+            String timeframe
     );
 }

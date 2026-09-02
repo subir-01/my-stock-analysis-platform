@@ -1,8 +1,8 @@
 package com.Dashboard.myTradingPlatform.market.service;
 
-import com.Dashboard.myTradingPlatform.market.event.MarketCandleEntity;
 import com.Dashboard.myTradingPlatform.market.model.MarketCandle;
 import com.Dashboard.myTradingPlatform.market.repository.MarketCandleRepository;
+import com.Dashboard.myTradingPlatform.market.event.MarketCandleEntity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,8 +17,6 @@ import java.util.Optional;
 @Slf4j
 public class MarketCandlePersistenceService {
 
-    private static final int MAX_CACHE_LOAD = 500;
-
     private final MarketCandleRepository repository;
 
     public MarketCandlePersistenceService(
@@ -31,33 +29,12 @@ public class MarketCandlePersistenceService {
      * =========================================================
      * SAVE SINGLE CANDLE
      * =========================================================
-     *
-     * Used primarily for completed live candles.
-     *
-     * Returns:
-     *
-     * true  -> candle inserted
-     * false -> candle already exists
      */
     @Transactional
-    public boolean save(MarketCandle candle) {
+    public boolean save(
+            MarketCandle candle) {
 
         if (candle == null) {
-
-            log.warn(
-                    "Cannot persist null candle"
-            );
-
-            return false;
-        }
-
-        if (!isValid(candle)) {
-
-            log.warn(
-                    "Cannot persist invalid candle: {}",
-                    candle
-            );
-
             return false;
         }
 
@@ -98,12 +75,8 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
-     * SAVE HISTORICAL CANDLES
+     * SAVE MULTIPLE CANDLES
      * =========================================================
-     *
-     * Historical API may return thousands of candles.
-     *
-     * Existing candles are skipped.
      */
     @Transactional
     public void saveAll(
@@ -111,10 +84,6 @@ public class MarketCandlePersistenceService {
 
         if (candles == null
                 || candles.isEmpty()) {
-
-            log.debug(
-                    "No historical candles to persist"
-            );
 
             return;
         }
@@ -125,7 +94,12 @@ public class MarketCandlePersistenceService {
 
         for (MarketCandle candle : candles) {
 
-            if (!isValid(candle)) {
+            if (candle == null
+                    || candle.instrumentKey() == null
+                    || candle.instrumentKey().isBlank()
+                    || candle.timeframe() == null
+                    || candle.timeframe().isBlank()
+                    || candle.timestamp() == null) {
 
                 invalidCount++;
 
@@ -165,6 +139,22 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
+     * COUNT CANDLES
+     * =========================================================
+     */
+    @Transactional(readOnly = true)
+    public long countCandles(
+            String instrumentKey,
+            String timeframe) {
+
+        return repository.countByInstrumentKeyAndTimeframe(
+                instrumentKey,
+                timeframe
+        );
+    }
+
+    /*
+     * =========================================================
      * FIND LATEST CANDLE
      * =========================================================
      */
@@ -172,14 +162,6 @@ public class MarketCandlePersistenceService {
     public Optional<MarketCandle> findLatestCandle(
             String instrumentKey,
             String timeframe) {
-
-        if (instrumentKey == null
-                || instrumentKey.isBlank()
-                || timeframe == null
-                || timeframe.isBlank()) {
-
-            return Optional.empty();
-        }
 
         return repository
                 .findTopByInstrumentKeyAndTimeframeOrderByTimestampDesc(
@@ -191,24 +173,8 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
-     * FIND LATEST N CANDLES
+     * FIND LATEST CANDLES
      * =========================================================
-     *
-     * Database returns:
-     *
-     * newest -> oldest
-     *
-     * We reverse it before returning:
-     *
-     * oldest -> newest
-     *
-     * This is important for:
-     *
-     * SMA
-     * EMA
-     * RSI
-     * Support
-     * Resistance
      */
     @Transactional(readOnly = true)
     public List<MarketCandle> findLatestCandles(
@@ -216,53 +182,29 @@ public class MarketCandlePersistenceService {
             String timeframe,
             int limit) {
 
-        if (instrumentKey == null
-                || instrumentKey.isBlank()
-                || timeframe == null
-                || timeframe.isBlank()
-                || limit <= 0) {
-
+        if (limit <= 0) {
             return List.of();
         }
-
-        int actualLimit =
-                Math.min(
-                        limit,
-                        MAX_CACHE_LOAD
-                );
 
         List<MarketCandleEntity> entities =
                 repository
                         .findTop500ByInstrumentKeyAndTimeframeOrderByTimestampDesc(
                                 instrumentKey,
                                 timeframe
-                        );
-
-        if (entities == null
-                || entities.isEmpty()) {
-
-            return List.of();
-        }
+                        )
+                        .stream()
+                        .limit(
+                                Math.min(limit, 500)
+                        )
+                        .toList();
 
         List<MarketCandle> candles =
                 entities.stream()
-                        .limit(actualLimit)
                         .map(this::toMarketCandle)
                         .toList();
 
-        /*
-         * DB order:
-         *
-         * newest -> oldest
-         *
-         * Analytics/cache order:
-         *
-         * oldest -> newest
-         */
         List<MarketCandle> ordered =
-                new ArrayList<>(
-                        candles
-                );
+                new ArrayList<>(candles);
 
         Collections.reverse(
                 ordered
@@ -281,14 +223,6 @@ public class MarketCandlePersistenceService {
             String instrumentKey,
             String timeframe) {
 
-        if (instrumentKey == null
-                || instrumentKey.isBlank()
-                || timeframe == null
-                || timeframe.isBlank()) {
-
-            return List.of();
-        }
-
         return repository
                 .findByInstrumentKeyAndTimeframeAndTimestampBetweenOrderByTimestampAsc(
                         instrumentKey,
@@ -303,7 +237,7 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
-     * FIND CANDLES BY DATE/TIME RANGE
+     * FIND CANDLES BY DATE RANGE
      * =========================================================
      */
     @Transactional(readOnly = true)
@@ -312,27 +246,6 @@ public class MarketCandlePersistenceService {
             String timeframe,
             Instant from,
             Instant to) {
-
-        if (instrumentKey == null
-                || instrumentKey.isBlank()
-                || timeframe == null
-                || timeframe.isBlank()
-                || from == null
-                || to == null) {
-
-            return List.of();
-        }
-
-        if (from.isAfter(to)) {
-
-            log.warn(
-                    "Invalid candle time range: from={}, to={}",
-                    from,
-                    to
-            );
-
-            return List.of();
-        }
 
         return repository
                 .findByInstrumentKeyAndTimeframeAndTimestampBetweenOrderByTimestampAsc(
@@ -348,35 +261,7 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
-     * CHECK CANDLE EXISTS
-     * =========================================================
-     */
-    @Transactional(readOnly = true)
-    public boolean exists(
-            String instrumentKey,
-            String timeframe,
-            Instant timestamp) {
-
-        if (instrumentKey == null
-                || instrumentKey.isBlank()
-                || timeframe == null
-                || timeframe.isBlank()
-                || timestamp == null) {
-
-            return false;
-        }
-
-        return repository
-                .existsByInstrumentKeyAndTimeframeAndTimestamp(
-                        instrumentKey,
-                        timeframe,
-                        timestamp
-                );
-    }
-
-    /*
-     * =========================================================
-     * CONVERT DOMAIN -> ENTITY
+     * ENTITY MAPPER
      * =========================================================
      */
     private MarketCandleEntity toEntity(
@@ -422,7 +307,7 @@ public class MarketCandlePersistenceService {
 
     /*
      * =========================================================
-     * CONVERT ENTITY -> DOMAIN
+     * DOMAIN MAPPER
      * =========================================================
      */
     private MarketCandle toMarketCandle(
@@ -438,41 +323,5 @@ public class MarketCandlePersistenceService {
                 entity.getVolume(),
                 entity.getTimestamp()
         );
-    }
-
-    /*
-     * =========================================================
-     * VALIDATE CANDLE
-     * =========================================================
-     */
-    private boolean isValid(
-            MarketCandle candle) {
-
-        if (candle == null) {
-            return false;
-        }
-
-        if (candle.instrumentKey() == null
-                || candle.instrumentKey().isBlank()) {
-            return false;
-        }
-
-        if (candle.timeframe() == null
-                || candle.timeframe().isBlank()) {
-            return false;
-        }
-
-        if (candle.timestamp() == null) {
-            return false;
-        }
-
-        if (candle.open() == null
-                || candle.high() == null
-                || candle.low() == null
-                || candle.close() == null) {
-            return false;
-        }
-
-        return true;
     }
 }

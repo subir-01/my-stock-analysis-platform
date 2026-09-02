@@ -13,6 +13,11 @@ public class SupportCalculator {
             List<MarketCandle> candles,
             BigDecimal currentPrice) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         */
         if (candles == null
                 || candles.size() < 3
                 || currentPrice == null) {
@@ -23,15 +28,22 @@ public class SupportCalculator {
         BigDecimal support = null;
 
         /*
-         * Start from the second candle because we need:
+         * =====================================================
+         * FIND SWING LOWS
+         * =====================================================
          *
-         * previous candle
-         * current candle
-         * next candle
+         * A candle is treated as a swing low when:
          *
-         * to identify a swing low.
+         * current low <= previous low
+         * AND
+         * current low <= next low
+         *
+         * From all swing lows below the current price,
+         * we select the closest one.
          */
-        for (int i = 1; i < candles.size() - 1; i++) {
+        for (int i = 1;
+             i < candles.size() - 1;
+             i++) {
 
             MarketCandle previous =
                     candles.get(i - 1);
@@ -44,8 +56,12 @@ public class SupportCalculator {
 
             if (previous == null
                     || current == null
-                    || next == null
-                    || previous.low() == null
+                    || next == null) {
+
+                continue;
+            }
+
+            if (previous.low() == null
                     || current.low() == null
                     || next.low() == null) {
 
@@ -62,45 +78,25 @@ public class SupportCalculator {
                     next.low();
 
             /*
-             * Swing Low:
-             *
-             *       previous
-             *          ↓
-             *
-             *        current
-             *           ↓
-             *          LOW
-             *
-             *        next
+             * Check swing-low structure.
              */
             boolean isSwingLow =
                     currentLow.compareTo(previousLow) <= 0
                             && currentLow.compareTo(nextLow) <= 0;
 
-            /*
-             * Support must be below the current market price.
-             */
-            boolean belowCurrentPrice =
-                    currentLow.compareTo(currentPrice) < 0;
-
-            if (!isSwingLow || !belowCurrentPrice) {
+            if (!isSwingLow) {
                 continue;
             }
 
             /*
-             * Select the closest support below
-             * the current market price.
-             *
-             * Example:
-             *
-             * Current price = 1287
-             *
-             * Swing lows:
-             * 1250
-             * 1270
-             * 1280
-             *
-             * Support = 1280
+             * Support must be below current price.
+             */
+            if (currentLow.compareTo(currentPrice) >= 0) {
+                continue;
+            }
+
+            /*
+             * Select nearest support.
              */
             if (support == null
                     || currentLow.compareTo(support) > 0) {

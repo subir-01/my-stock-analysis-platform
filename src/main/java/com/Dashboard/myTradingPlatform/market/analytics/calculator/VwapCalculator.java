@@ -5,9 +5,6 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.LocalDate;
 import java.util.List;
 
 @Component
@@ -16,96 +13,68 @@ public class VwapCalculator {
     private static final int CALCULATION_SCALE = 10;
     private static final int RESULT_SCALE = 4;
 
-    /*
-     * Indian market timezone.
-     */
-    private static final ZoneId MARKET_ZONE =
-            ZoneId.of("Asia/Kolkata");
-
     public BigDecimal calculate(
             List<MarketCandle> candles) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         */
         if (candles == null
                 || candles.isEmpty()) {
 
             return null;
         }
 
-        /*
-         * ---------------------------------------------------------
-         * Determine the latest trading session.
-         * ---------------------------------------------------------
-         *
-         * The latest candle determines which session's VWAP
-         * we need to calculate.
-         */
-        MarketCandle latest =
-                candles.get(
-                        candles.size() - 1
-                );
-
-        if (latest == null
-                || latest.timestamp() == null) {
-
-            return null;
-        }
-
-        LocalDate latestSession =
-                getTradingDate(
-                        latest.timestamp()
-                );
-
         BigDecimal totalPriceVolume =
                 BigDecimal.ZERO;
 
-        long totalVolume = 0;
+        BigDecimal totalVolume =
+                BigDecimal.ZERO;
 
         /*
-         * ---------------------------------------------------------
-         * Process only candles belonging to the latest session.
-         * ---------------------------------------------------------
+         * =====================================================
+         * VWAP CALCULATION
+         * =====================================================
+         *
+         * Typical Price:
+         *
+         * (High + Low + Close) / 3
+         *
+         * VWAP:
+         *
+         * Sum(Typical Price × Volume)
+         * ----------------------------
+         *          Sum(Volume)
+         *
+         * Candles are expected in chronological order:
+         *
+         * oldest -> newest
          */
         for (MarketCandle candle : candles) {
 
-            if (candle == null
-                    || candle.timestamp() == null
-                    || candle.high() == null
-                    || candle.low() == null
-                    || candle.close() == null
-                    || candle.volume() == null) {
-
+            if (candle == null) {
                 continue;
             }
-
-            LocalDate candleSession =
-                    getTradingDate(
-                            candle.timestamp()
-                    );
 
             /*
-             * Ignore previous trading sessions.
+             * Ignore invalid OHLC candles.
              */
-            if (!latestSession.equals(
-                    candleSession)) {
+            if (candle.high() == null
+                    || candle.low() == null
+                    || candle.close() == null) {
 
                 continue;
             }
-
-            long volume =
-                    candle.volume();
 
             /*
              * Ignore candles without usable volume.
              */
-            if (volume <= 0) {
+            if (candle.volume() <= 0) {
                 continue;
             }
 
-            /*
-             * Typical Price =
-             *
-             * (High + Low + Close) / 3
-             */
             BigDecimal typicalPrice =
                     candle.high()
                             .add(candle.low())
@@ -116,48 +85,46 @@ public class VwapCalculator {
                                     RoundingMode.HALF_UP
                             );
 
-            /*
-             * Typical Price × Volume
-             */
-            BigDecimal priceVolume =
-                    typicalPrice.multiply(
-                            BigDecimal.valueOf(volume)
+            BigDecimal volume =
+                    BigDecimal.valueOf(
+                            candle.volume()
                     );
 
             totalPriceVolume =
                     totalPriceVolume.add(
-                            priceVolume
+                            typicalPrice.multiply(
+                                    volume
+                            )
                     );
 
-            totalVolume += volume;
+            totalVolume =
+                    totalVolume.add(
+                            volume
+                    );
         }
 
         /*
-         * No usable volume.
+         * =====================================================
+         * NO VALID VOLUME
+         * =====================================================
          */
-        if (totalVolume <= 0) {
+        if (totalVolume.compareTo(
+                BigDecimal.ZERO
+        ) == 0) {
+
             return null;
         }
 
         /*
-         * VWAP =
-         *
-         * Σ(Typical Price × Volume)
-         * /
-         * ΣVolume
+         * =====================================================
+         * FINAL VWAP
+         * =====================================================
          */
-        return totalPriceVolume.divide(
-                BigDecimal.valueOf(totalVolume),
-                RESULT_SCALE,
-                RoundingMode.HALF_UP
-        );
-    }
-
-    private LocalDate getTradingDate(
-            Instant timestamp) {
-
-        return timestamp
-                .atZone(MARKET_ZONE)
-                .toLocalDate();
+        return totalPriceVolume
+                .divide(
+                        totalVolume,
+                        RESULT_SCALE,
+                        RoundingMode.HALF_UP
+                );
     }
 }

@@ -14,9 +14,19 @@ public class UpstoxHistoricalDataClient {
     public UpstoxHistoricalDataClient(
             @Value("${UPSTOX_ACCESS_TOKEN}") String accessToken) {
 
+        if (accessToken == null
+                || accessToken.isBlank()) {
+
+            throw new IllegalStateException(
+                    "UPSTOX_ACCESS_TOKEN is not configured"
+            );
+        }
+
         this.restClient =
                 RestClient.builder()
-                        .baseUrl("https://api.upstox.com")
+                        .baseUrl(
+                                "https://api.upstox.com"
+                        )
                         .defaultHeader(
                                 "Authorization",
                                 "Bearer " + accessToken
@@ -38,22 +48,20 @@ public class UpstoxHistoricalDataClient {
 
     /*
      * =========================================================
-     * GENERIC HISTORICAL CANDLE REQUEST
+     * GET HISTORICAL CANDLES
      * =========================================================
      *
-     * Examples:
+     * Supported examples:
      *
-     * I1:
-     * /v3/historical-candle/{instrument}/minutes/1/{to}/{from}
+     * minutes / 1
+     * minutes / 5
+     * minutes / 15
+     * days / 1
      *
-     * I5:
-     * /v3/historical-candle/{instrument}/minutes/5/{to}/{from}
+     * The URL generated is:
      *
-     * I15:
-     * /v3/historical-candle/{instrument}/minutes/15/{to}/{from}
-     *
-     * D1:
-     * /v3/historical-candle/{instrument}/days/1/{to}/{from}
+     * /v3/historical-candle/{instrumentKey}
+     * /{unit}/{interval}/{toDate}/{fromDate}
      */
     public String getHistoricalCandles(
             String instrumentKey,
@@ -61,6 +69,14 @@ public class UpstoxHistoricalDataClient {
             int interval,
             String toDate,
             String fromDate) {
+
+        validateRequest(
+                instrumentKey,
+                unit,
+                interval,
+                toDate,
+                fromDate
+        );
 
         log.info(
                 "Fetching historical candles: instrument={}, unit={}, interval={}, from={}, to={}",
@@ -71,143 +87,140 @@ public class UpstoxHistoricalDataClient {
                 toDate
         );
 
-        return restClient
-                .get()
-                .uri(uriBuilder ->
-                        uriBuilder
-                                .path(
-                                        "/v3/historical-candle/{instrumentKey}/{unit}/{interval}/{toDate}/{fromDate}"
-                                )
-                                .build(
-                                        instrumentKey,
-                                        unit,
-                                        interval,
-                                        toDate,
-                                        fromDate
-                                )
-                )
-                .retrieve()
-                .body(String.class);
+        try {
+
+            String response =
+                    restClient.get()
+                            .uri(uriBuilder ->
+                                    uriBuilder
+                                            .path(
+                                                    "/v3/historical-candle/{instrumentKey}/{unit}/{interval}/{toDate}/{fromDate}"
+                                            )
+                                            .build(
+                                                    instrumentKey,
+                                                    unit,
+                                                    interval,
+                                                    toDate,
+                                                    fromDate
+                                            )
+                            )
+                            .retrieve()
+                            .body(String.class);
+
+            if (response == null
+                    || response.isBlank()) {
+
+                log.warn(
+                        "Empty historical API response: instrument={}, unit={}, interval={}, from={}, to={}",
+                        instrumentKey,
+                        unit,
+                        interval,
+                        fromDate,
+                        toDate
+                );
+
+                return null;
+            }
+
+            log.debug(
+                    "Historical API response received: instrument={}, unit={}, interval={}",
+                    instrumentKey,
+                    unit,
+                    interval
+            );
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error(
+                    "Failed to fetch historical candles: instrument={}, unit={}, interval={}, from={}, to={}",
+                    instrumentKey,
+                    unit,
+                    interval,
+                    fromDate,
+                    toDate,
+                    e
+            );
+
+            throw e;
+        }
     }
 
     /*
      * =========================================================
-     * MINUTE HISTORICAL DATA
+     * VALIDATION
      * =========================================================
      */
-    public String getMinuteHistoricalCandles(
+    private void validateRequest(
             String instrumentKey,
+            String unit,
             int interval,
             String toDate,
             String fromDate) {
 
-        return getHistoricalCandles(
-                instrumentKey,
-                "minutes",
-                interval,
-                toDate,
-                fromDate
-        );
+        if (instrumentKey == null
+                || instrumentKey.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Instrument key must not be null or blank"
+            );
+        }
+
+        if (unit == null
+                || unit.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Historical data unit must not be null or blank"
+            );
+        }
+
+        if (interval <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Historical data interval must be greater than zero"
+            );
+        }
+
+        if (toDate == null
+                || toDate.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "To date must not be null or blank"
+            );
+        }
+
+        if (fromDate == null
+                || fromDate.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "From date must not be null or blank"
+            );
+        }
     }
 
     /*
      * =========================================================
-     * DAILY HISTORICAL DATA
+     * TEST HISTORICAL DATA
      * =========================================================
+     *
+     * This method is only for manual testing.
+     *
+     * It can be called from a test/controller if required.
      */
-    public String getDailyHistoricalCandles(
-            String instrumentKey,
-            String toDate,
-            String fromDate) {
-
-        return getHistoricalCandles(
-                instrumentKey,
-                "days",
-                1,
-                toDate,
-                fromDate
-        );
-    }
-
-    /*
-     * =========================================================
-     * TEST I1
-     * =========================================================
-     */
-    public void testOneMinuteHistoricalData() {
+    public void testHistoricalData() {
 
         String response =
-                getMinuteHistoricalCandles(
+                getHistoricalCandles(
                         "NSE_EQ|INE002A01018",
+                        "minutes",
                         1,
                         "2026-08-27",
                         "2026-08-01"
                 );
 
         log.info(
-                "1-minute historical API response: {}",
-                response
-        );
-    }
-
-    /*
-     * =========================================================
-     * TEST I5
-     * =========================================================
-     */
-    public void testFiveMinuteHistoricalData() {
-
-        String response =
-                getMinuteHistoricalCandles(
-                        "NSE_EQ|INE002A01018",
-                        5,
-                        "2026-08-27",
-                        "2026-08-01"
-                );
-
-        log.info(
-                "5-minute historical API response: {}",
-                response
-        );
-    }
-
-    /*
-     * =========================================================
-     * TEST I15
-     * =========================================================
-     */
-    public void testFifteenMinuteHistoricalData() {
-
-        String response =
-                getMinuteHistoricalCandles(
-                        "NSE_EQ|INE002A01018",
-                        15,
-                        "2026-08-27",
-                        "2026-08-01"
-                );
-
-        log.info(
-                "15-minute historical API response: {}",
-                response
-        );
-    }
-
-    /*
-     * =========================================================
-     * TEST DAILY
-     * =========================================================
-     */
-    public void testDailyHistoricalData() {
-
-        String response =
-                getDailyHistoricalCandles(
-                        "NSE_EQ|INE002A01018",
-                        "2026-08-27",
-                        "2026-08-01"
-                );
-
-        log.info(
-                "Daily historical API response: {}",
+                "Historical API response: {}",
                 response
         );
     }

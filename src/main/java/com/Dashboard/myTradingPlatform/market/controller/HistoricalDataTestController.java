@@ -13,10 +13,10 @@ import java.util.List;
 @RestController
 public class HistoricalDataTestController {
 
-    private static final String DEFAULT_INSTRUMENT =
+    private static final String INSTRUMENT_KEY =
             "NSE_EQ|INE002A01018";
 
-    private static final String DEFAULT_TIMEFRAME =
+    private static final String TIMEFRAME =
             "I1";
 
     private final HistoricalDataService historicalDataService;
@@ -43,27 +43,25 @@ public class HistoricalDataTestController {
      * TEST HISTORICAL DATA
      * =========================================================
      *
-     * Example:
+     * Downloads historical I1 candles and processes them.
      *
-     * GET /api/test/historical
-     *
-     * Downloads I1 candles from Upstox and stores them in
-     * database + cache.
+     * NOTE:
+     * The interval parameter is no longer required.
      */
     @GetMapping("/api/test/historical")
     public String testHistoricalData() {
 
         historicalDataService.loadHistoricalData(
-                DEFAULT_INSTRUMENT,
-                DEFAULT_TIMEFRAME,
+                INSTRUMENT_KEY,
+                TIMEFRAME,
                 "2026-08-01",
                 "2026-08-27"
         );
 
         int count =
                 marketCandleCache.getCandleCount(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
+                        INSTRUMENT_KEY,
+                        TIMEFRAME
                 );
 
         return "Historical candles loaded into cache: "
@@ -75,14 +73,16 @@ public class HistoricalDataTestController {
      * GET LAST 100 CANDLES
      * =========================================================
      *
-     * GET /api/test/candles
+     * Returned in chronological order:
+     *
+     * oldest -> newest
      */
     @GetMapping("/api/test/candles")
     public List<MarketCandle> getLastCandles() {
 
         return marketCandleCache.getLastCandles(
-                DEFAULT_INSTRUMENT,
-                DEFAULT_TIMEFRAME,
+                INSTRUMENT_KEY,
+                TIMEFRAME,
                 100
         );
     }
@@ -91,162 +91,78 @@ public class HistoricalDataTestController {
      * =========================================================
      * GET LATEST CANDLE
      * =========================================================
-     *
-     * GET /api/test/latest-candle
      */
     @GetMapping("/api/test/latest-candle")
     public MarketCandle getLatestCandle() {
 
         return marketCandleCache.getLatest(
-                DEFAULT_INSTRUMENT,
-                DEFAULT_TIMEFRAME
+                INSTRUMENT_KEY,
+                TIMEFRAME
         );
     }
 
     /*
      * =========================================================
-     * GET CANDLE COUNT
+     * GET CURRENT LIVE CANDLE
      * =========================================================
      *
-     * GET /api/test/candle-count
+     * Useful for verifying that the WebSocket is continuously
+     * updating the currently forming candle.
      */
-    @GetMapping("/api/test/candle-count")
-    public String getCandleCount() {
+    @GetMapping("/api/test/current-candle")
+    public MarketCandle getCurrentCandle() {
+
+        return marketCandleCache.getLatest(
+                INSTRUMENT_KEY,
+                TIMEFRAME
+        );
+    }
+
+    /*
+     * =========================================================
+     * GET MARKET ANALYSIS
+     * =========================================================
+     *
+     * Analytics reads the latest candles directly from the
+     * in-memory cache.
+     */
+    @GetMapping("/api/test/analysis")
+    public MarketAnalysis testAnalysis() {
+
+        return marketAnalyticsService.analyze(
+                INSTRUMENT_KEY,
+                TIMEFRAME
+        );
+    }
+
+    /*
+     * =========================================================
+     * GET CACHE COUNT
+     * =========================================================
+     */
+    @GetMapping("/api/test/cache-count")
+    public String getCacheCount() {
 
         int count =
                 marketCandleCache.getCandleCount(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
+                        INSTRUMENT_KEY,
+                        TIMEFRAME
                 );
 
-        return "Cached candle count: " + count;
+        return "Cached candles: " + count;
     }
 
     /*
      * =========================================================
      * CHECK CACHE
      * =========================================================
-     *
-     * GET /api/test/cache-status
      */
-    @GetMapping("/api/test/cache-status")
-    public String getCacheStatus() {
+    @GetMapping("/api/test/cache-exists")
+    public boolean cacheExists() {
 
-        boolean contains =
-                marketCandleCache.contains(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
-                );
-
-        if (!contains) {
-
-            return "Cache is empty for instrument="
-                    + DEFAULT_INSTRUMENT
-                    + ", timeframe="
-                    + DEFAULT_TIMEFRAME;
-        }
-
-        int count =
-                marketCandleCache.getCandleCount(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
-                );
-
-        MarketCandle latest =
-                marketCandleCache.getLatest(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
-                );
-
-        return "Cache contains candles: "
-                + count
-                + ", latestTimestamp="
-                + (latest != null
-                ? latest.timestamp()
-                : null);
-    }
-
-    /*
-     * =========================================================
-     * MARKET ANALYSIS
-     * =========================================================
-     *
-     * GET /api/test/analysis
-     *
-     * Returns:
-     *
-     * price
-     * SMA20
-     * EMA20
-     * EMA50
-     * RSI14
-     * VWAP
-     * support
-     * resistance
-     */
-    @GetMapping("/api/test/analysis")
-    public MarketAnalysis testAnalysis() {
-
-        return marketAnalyticsService.analyze(
-                DEFAULT_INSTRUMENT,
-                DEFAULT_TIMEFRAME
+        return marketCandleCache.contains(
+                INSTRUMENT_KEY,
+                TIMEFRAME
         );
-    }
-
-    /*
-     * =========================================================
-     * ANALYSIS STATUS
-     * =========================================================
-     *
-     * Useful for quickly checking whether enough candles
-     * are available for the indicators.
-     *
-     * GET /api/test/analysis-status
-     */
-    @GetMapping("/api/test/analysis-status")
-    public String analysisStatus() {
-
-        int count =
-                marketCandleCache.getCandleCount(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
-                );
-
-        if (count < 50) {
-
-            return "Not enough candles for full analysis. "
-                    + "Available="
-                    + count
-                    + ", required=50";
-        }
-
-        MarketAnalysis analysis =
-                marketAnalyticsService.analyze(
-                        DEFAULT_INSTRUMENT,
-                        DEFAULT_TIMEFRAME
-                );
-
-        if (analysis == null) {
-
-            return "Market analysis is not available";
-        }
-
-        return "Market analysis available: "
-                + "price="
-                + analysis.price()
-                + ", SMA20="
-                + analysis.sma20()
-                + ", EMA20="
-                + analysis.ema20()
-                + ", EMA50="
-                + analysis.ema50()
-                + ", RSI14="
-                + analysis.rsi14()
-                + ", VWAP="
-                + analysis.vwap()
-                + ", support="
-                + analysis.support()
-                + ", resistance="
-                + analysis.resistance();
     }
 }

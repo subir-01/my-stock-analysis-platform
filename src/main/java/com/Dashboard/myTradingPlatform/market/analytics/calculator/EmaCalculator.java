@@ -17,6 +17,11 @@ public class EmaCalculator {
             List<MarketCandle> candles,
             int period) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         */
         if (candles == null
                 || candles.isEmpty()
                 || period <= 0
@@ -26,13 +31,23 @@ public class EmaCalculator {
         }
 
         /*
-         * ---------------------------------------------------------
-         * Step 1: Calculate initial SMA
-         * ---------------------------------------------------------
+         * =====================================================
+         * INITIAL EMA
+         * =====================================================
          *
-         * EMA starts with an SMA of the first 'period' candles.
+         * The first EMA value is initialized using SMA
+         * of the first 'period' candles.
+         *
+         * Example for EMA20:
+         *
+         * First 20 candles
+         *        ↓
+         *      SMA20
+         *        ↓
+         * Initial EMA
          */
-        BigDecimal sum = BigDecimal.ZERO;
+        BigDecimal sum =
+                BigDecimal.ZERO;
 
         for (int i = 0; i < period; i++) {
 
@@ -45,9 +60,10 @@ public class EmaCalculator {
                 return null;
             }
 
-            sum = sum.add(
-                    candle.close()
-            );
+            sum =
+                    sum.add(
+                            candle.close()
+                    );
         }
 
         BigDecimal ema =
@@ -58,31 +74,46 @@ public class EmaCalculator {
                 );
 
         /*
-         * ---------------------------------------------------------
-         * Step 2: EMA multiplier
-         * ---------------------------------------------------------
+         * =====================================================
+         * EMA MULTIPLIER
+         * =====================================================
          *
-         * Multiplier = 2 / (period + 1)
+         * Multiplier =
+         *
+         *       2
+         *  -----------
+         *   period + 1
+         *
+         * For EMA20:
+         *
+         * 2 / 21
          */
         BigDecimal multiplier =
                 BigDecimal.valueOf(2)
                         .divide(
-                                BigDecimal.valueOf(period + 1),
+                                BigDecimal.valueOf(
+                                        period + 1
+                                ),
                                 CALCULATION_SCALE,
                                 RoundingMode.HALF_UP
                         );
 
         /*
-         * ---------------------------------------------------------
-         * Step 3: Calculate EMA
-         * ---------------------------------------------------------
+         * =====================================================
+         * CALCULATE EMA
+         * =====================================================
          *
          * EMA =
          *
-         * (Close - Previous EMA) * Multiplier
+         * (Close - Previous EMA) × Multiplier
          * + Previous EMA
+         *
+         * We continue from candle 'period' until the latest
+         * candle.
          */
-        for (int i = period; i < candles.size(); i++) {
+        for (int i = period;
+             i < candles.size();
+             i++) {
 
             MarketCandle candle =
                     candles.get(i);
@@ -104,7 +135,9 @@ public class EmaCalculator {
         }
 
         /*
-         * Return consistent 4-decimal precision.
+         * =====================================================
+         * RESULT
+         * =====================================================
          */
         return ema.setScale(
                 RESULT_SCALE,

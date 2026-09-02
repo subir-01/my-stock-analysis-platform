@@ -16,62 +16,75 @@ public class RsiCalculator {
     private static final BigDecimal ONE_HUNDRED =
             BigDecimal.valueOf(100);
 
+    private static final BigDecimal ZERO =
+            BigDecimal.ZERO;
+
     public BigDecimal calculate(
             List<MarketCandle> candles,
             int period) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         *
+         * RSI requires at least:
+         *
+         * period + 1 candles
+         *
+         * because we need 'period' price changes.
+         */
         if (candles == null
-                || candles.size() <= period
-                || period <= 0) {
+                || candles.isEmpty()
+                || period <= 0
+                || candles.size() <= period) {
 
             return null;
         }
 
         /*
-         * ---------------------------------------------------------
-         * Step 1: Initial average gain/loss
-         * ---------------------------------------------------------
+         * =====================================================
+         * INITIAL GAIN / LOSS
+         * =====================================================
          *
-         * We need 'period' price changes.
-         *
-         * For RSI 14:
-         *
-         * candle 0 -> candle 1
-         * candle 1 -> candle 2
-         * ...
-         * candle 13 -> candle 14
+         * Calculate the first 'period' price changes.
          */
         BigDecimal gainSum =
-                BigDecimal.ZERO;
+                ZERO;
 
         BigDecimal lossSum =
-                BigDecimal.ZERO;
+                ZERO;
 
-        for (int i = 1; i <= period; i++) {
+        for (int i = 1;
+             i <= period;
+             i++) {
 
-            BigDecimal currentClose =
-                    getClose(candles.get(i));
+            MarketCandle previous =
+                    candles.get(i - 1);
 
-            BigDecimal previousClose =
-                    getClose(candles.get(i - 1));
+            MarketCandle current =
+                    candles.get(i);
 
-            if (currentClose == null
-                    || previousClose == null) {
+            if (previous == null
+                    || current == null
+                    || previous.close() == null
+                    || current.close() == null) {
 
                 return null;
             }
 
             BigDecimal change =
-                    currentClose.subtract(
-                            previousClose
-                    );
+                    current.close()
+                            .subtract(
+                                    previous.close()
+                            );
 
-            if (change.compareTo(BigDecimal.ZERO) > 0) {
+            if (change.compareTo(ZERO) > 0) {
 
                 gainSum =
                         gainSum.add(change);
 
-            } else if (change.compareTo(BigDecimal.ZERO) < 0) {
+            } else if (change.compareTo(ZERO) < 0) {
 
                 lossSum =
                         lossSum.add(
@@ -80,118 +93,119 @@ public class RsiCalculator {
             }
         }
 
+        /*
+         * =====================================================
+         * INITIAL AVERAGE GAIN / LOSS
+         * =====================================================
+         */
+        BigDecimal periodValue =
+                BigDecimal.valueOf(period);
+
         BigDecimal averageGain =
                 gainSum.divide(
-                        BigDecimal.valueOf(period),
+                        periodValue,
                         CALCULATION_SCALE,
                         RoundingMode.HALF_UP
                 );
 
         BigDecimal averageLoss =
                 lossSum.divide(
-                        BigDecimal.valueOf(period),
+                        periodValue,
                         CALCULATION_SCALE,
                         RoundingMode.HALF_UP
                 );
 
         /*
-         * ---------------------------------------------------------
-         * Step 2: Wilder's smoothing
-         * ---------------------------------------------------------
+         * =====================================================
+         * WILDER'S RSI SMOOTHING
+         * =====================================================
          *
-         * Average Gain =
+         * Average Gain:
          *
          * ((Previous Average Gain × (period - 1))
          *  + Current Gain) / period
          *
-         * Same formula for Average Loss.
+         * Average Loss:
+         *
+         * ((Previous Average Loss × (period - 1))
+         *  + Current Loss) / period
          */
+        BigDecimal smoothingFactor =
+                BigDecimal.valueOf(
+                        period - 1
+                );
+
         for (int i = period + 1;
              i < candles.size();
              i++) {
 
-            BigDecimal currentClose =
-                    getClose(candles.get(i));
+            MarketCandle previous =
+                    candles.get(i - 1);
 
-            BigDecimal previousClose =
-                    getClose(candles.get(i - 1));
+            MarketCandle current =
+                    candles.get(i);
 
-            if (currentClose == null
-                    || previousClose == null) {
+            if (previous == null
+                    || current == null
+                    || previous.close() == null
+                    || current.close() == null) {
 
                 return null;
             }
 
             BigDecimal change =
-                    currentClose.subtract(
-                            previousClose
-                    );
+                    current.close()
+                            .subtract(
+                                    previous.close()
+                            );
 
             BigDecimal gain =
-                    change.compareTo(BigDecimal.ZERO) > 0
-                            ? change
-                            : BigDecimal.ZERO;
+                    ZERO;
 
             BigDecimal loss =
-                    change.compareTo(BigDecimal.ZERO) < 0
-                            ? change.abs()
-                            : BigDecimal.ZERO;
+                    ZERO;
+
+            if (change.compareTo(ZERO) > 0) {
+
+                gain = change;
+
+            } else if (change.compareTo(ZERO) < 0) {
+
+                loss = change.abs();
+            }
 
             averageGain =
                     averageGain
-                            .multiply(
-                                    BigDecimal.valueOf(
-                                            period - 1
-                                    )
-                            )
+                            .multiply(smoothingFactor)
                             .add(gain)
                             .divide(
-                                    BigDecimal.valueOf(period),
+                                    periodValue,
                                     CALCULATION_SCALE,
                                     RoundingMode.HALF_UP
                             );
 
             averageLoss =
                     averageLoss
-                            .multiply(
-                                    BigDecimal.valueOf(
-                                            period - 1
-                                    )
-                            )
+                            .multiply(smoothingFactor)
                             .add(loss)
                             .divide(
-                                    BigDecimal.valueOf(period),
+                                    periodValue,
                                     CALCULATION_SCALE,
                                     RoundingMode.HALF_UP
                             );
         }
 
         /*
-         * ---------------------------------------------------------
-         * Step 3: Handle zero-loss scenarios
-         * ---------------------------------------------------------
+         * =====================================================
+         * EDGE CASE: NO LOSSES
+         * =====================================================
          *
-         * If there has been no loss:
+         * If average loss is zero, the market has moved
+         * upward throughout the calculation period.
          *
-         * Average Loss = 0
-         *
-         * RSI = 100 when there is gain.
+         * RSI = 100
          */
-        if (averageLoss.compareTo(BigDecimal.ZERO) == 0) {
-
-            if (averageGain.compareTo(BigDecimal.ZERO) == 0) {
-
-                /*
-                 * No movement at all.
-                 *
-                 * RSI is conventionally treated as 50.
-                 */
-                return BigDecimal.valueOf(50)
-                        .setScale(
-                                RESULT_SCALE,
-                                RoundingMode.HALF_UP
-                        );
-            }
+        if (averageLoss.compareTo(ZERO) == 0) {
 
             return ONE_HUNDRED.setScale(
                     RESULT_SCALE,
@@ -200,9 +214,26 @@ public class RsiCalculator {
         }
 
         /*
-         * ---------------------------------------------------------
-         * Step 4: Relative Strength
-         * ---------------------------------------------------------
+         * =====================================================
+         * EDGE CASE: NO GAINS
+         * =====================================================
+         *
+         * If average gain is zero while losses exist:
+         *
+         * RSI = 0
+         */
+        if (averageGain.compareTo(ZERO) == 0) {
+
+            return ZERO.setScale(
+                    RESULT_SCALE,
+                    RoundingMode.HALF_UP
+            );
+        }
+
+        /*
+         * =====================================================
+         * RELATIVE STRENGTH
+         * =====================================================
          *
          * RS = Average Gain / Average Loss
          */
@@ -214,36 +245,29 @@ public class RsiCalculator {
                 );
 
         /*
-         * ---------------------------------------------------------
-         * Step 5: RSI
-         * ---------------------------------------------------------
+         * =====================================================
+         * RSI
+         * =====================================================
          *
          * RSI = 100 - (100 / (1 + RS))
          */
-        BigDecimal rsi =
-                ONE_HUNDRED.subtract(
-                        ONE_HUNDRED.divide(
-                                BigDecimal.ONE.add(
-                                        relativeStrength
-                                ),
-                                CALCULATION_SCALE,
-                                RoundingMode.HALF_UP
-                        )
+        BigDecimal denominator =
+                BigDecimal.ONE.add(
+                        relativeStrength
                 );
 
-        return rsi.setScale(
-                RESULT_SCALE,
-                RoundingMode.HALF_UP
-        );
-    }
+        BigDecimal rsi =
+                ONE_HUNDRED.divide(
+                        denominator,
+                        CALCULATION_SCALE,
+                        RoundingMode.HALF_UP
+                );
 
-    private BigDecimal getClose(
-            MarketCandle candle) {
-
-        if (candle == null) {
-            return null;
-        }
-
-        return candle.close();
+        return ONE_HUNDRED
+                .subtract(rsi)
+                .setScale(
+                        RESULT_SCALE,
+                        RoundingMode.HALF_UP
+                );
     }
 }

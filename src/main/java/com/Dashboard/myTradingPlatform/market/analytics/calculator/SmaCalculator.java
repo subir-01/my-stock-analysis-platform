@@ -10,12 +10,19 @@ import java.util.List;
 @Component
 public class SmaCalculator {
 
-    private static final int SCALE = 4;
+    private static final int RESULT_SCALE = 4;
+    private static final RoundingMode ROUNDING_MODE =
+            RoundingMode.HALF_UP;
 
     public BigDecimal calculate(
             List<MarketCandle> candles,
             int period) {
 
+        /*
+         * =====================================================
+         * VALIDATION
+         * =====================================================
+         */
         if (candles == null
                 || candles.isEmpty()
                 || period <= 0
@@ -24,12 +31,26 @@ public class SmaCalculator {
             return null;
         }
 
-        BigDecimal sum = BigDecimal.ZERO;
+        BigDecimal sum =
+                BigDecimal.ZERO;
 
+        /*
+         * =====================================================
+         * LAST N CANDLES
+         * =====================================================
+         *
+         * Candles are expected in chronological order:
+         *
+         * oldest -> newest
+         *
+         * For SMA we only use the latest 'period' candles.
+         */
         int startIndex =
                 candles.size() - period;
 
-        for (int i = startIndex; i < candles.size(); i++) {
+        for (int i = startIndex;
+             i < candles.size();
+             i++) {
 
             MarketCandle candle =
                     candles.get(i);
@@ -40,15 +61,23 @@ public class SmaCalculator {
                 return null;
             }
 
-            sum = sum.add(
-                    candle.close()
-            );
+            sum =
+                    sum.add(
+                            candle.close()
+                    );
         }
 
+        /*
+         * =====================================================
+         * SMA
+         * =====================================================
+         *
+         * SMA = Sum of closing prices / period
+         */
         return sum.divide(
                 BigDecimal.valueOf(period),
-                SCALE,
-                RoundingMode.HALF_UP
+                RESULT_SCALE,
+                ROUNDING_MODE
         );
     }
 }

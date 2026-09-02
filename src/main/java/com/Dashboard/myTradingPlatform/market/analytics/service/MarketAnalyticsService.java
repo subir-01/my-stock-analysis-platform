@@ -21,6 +21,14 @@ public class MarketAnalyticsService {
 
     private static final int ANALYSIS_CANDLE_COUNT = 100;
 
+    private static final int SMA_PERIOD = 20;
+
+    private static final int EMA_SHORT_PERIOD = 20;
+
+    private static final int EMA_LONG_PERIOD = 50;
+
+    private static final int RSI_PERIOD = 14;
+
     private final MarketCandleCache marketCandleCache;
     private final SmaCalculator smaCalculator;
     private final EmaCalculator emaCalculator;
@@ -51,39 +59,27 @@ public class MarketAnalyticsService {
      * =========================================================
      * MARKET ANALYSIS
      * =========================================================
+     *
+     * All calculations are performed using the latest candles
+     * available in the in-memory MarketCandleCache.
+     *
+     * Candle order:
+     *
+     * oldest -> newest
      */
     public MarketAnalysis analyze(
             String instrumentKey,
             String timeframe) {
 
-        if (instrumentKey == null
-                || instrumentKey.isBlank()) {
-
-            log.warn(
-                    "Cannot analyze market: instrumentKey is empty"
-            );
-
-            return null;
-        }
-
-        if (timeframe == null
-                || timeframe.isBlank()) {
-
-            log.warn(
-                    "Cannot analyze market: timeframe is empty"
-            );
-
-            return null;
-        }
+        validateRequest(
+                instrumentKey,
+                timeframe
+        );
 
         /*
-         * Get the latest candles from memory.
-         *
-         * MarketCandleCache returns candles in:
-         *
-         * oldest -> newest
-         *
-         * This is required by EMA/RSI calculations.
+         * =====================================================
+         * GET LATEST CANDLES FROM CACHE
+         * =====================================================
          */
         List<MarketCandle> candles =
                 marketCandleCache.getLastCandles(
@@ -105,25 +101,6 @@ public class MarketAnalyticsService {
         }
 
         /*
-         * Remove null candles defensively.
-         */
-        candles =
-                candles.stream()
-                        .filter(candle -> candle != null)
-                        .toList();
-
-        if (candles.isEmpty()) {
-
-            log.warn(
-                    "No valid candles available for analysis: instrument={}, timeframe={}",
-                    instrumentKey,
-                    timeframe
-            );
-
-            return null;
-        }
-
-        /*
          * =====================================================
          * LATEST CANDLE
          * =====================================================
@@ -136,9 +113,10 @@ public class MarketAnalyticsService {
         if (latest.close() == null) {
 
             log.warn(
-                    "Latest candle has no close price: instrument={}, timeframe={}",
+                    "Latest candle has no close price: instrument={}, timeframe={}, timestamp={}",
                     instrumentKey,
-                    timeframe
+                    timeframe,
+                    latest.timestamp()
             );
 
             return null;
@@ -155,7 +133,7 @@ public class MarketAnalyticsService {
         BigDecimal sma20 =
                 smaCalculator.calculate(
                         candles,
-                        20
+                        SMA_PERIOD
                 );
 
         /*
@@ -166,7 +144,7 @@ public class MarketAnalyticsService {
         BigDecimal ema20 =
                 emaCalculator.calculate(
                         candles,
-                        20
+                        EMA_SHORT_PERIOD
                 );
 
         /*
@@ -177,7 +155,7 @@ public class MarketAnalyticsService {
         BigDecimal ema50 =
                 emaCalculator.calculate(
                         candles,
-                        50
+                        EMA_LONG_PERIOD
                 );
 
         /*
@@ -188,7 +166,7 @@ public class MarketAnalyticsService {
         BigDecimal rsi14 =
                 rsiCalculator.calculate(
                         candles,
-                        14
+                        RSI_PERIOD
                 );
 
         /*
@@ -262,39 +240,27 @@ public class MarketAnalyticsService {
 
     /*
      * =========================================================
-     * CHECK CACHE AVAILABILITY
+     * VALIDATE REQUEST
      * =========================================================
      */
-    public boolean hasEnoughCandles(
-            String instrumentKey,
-            String timeframe,
-            int requiredCount) {
-
-        if (requiredCount <= 0) {
-            return false;
-        }
-
-        int count =
-                marketCandleCache.getCandleCount(
-                        instrumentKey,
-                        timeframe
-                );
-
-        return count >= requiredCount;
-    }
-
-    /*
-     * =========================================================
-     * GET CANDLE COUNT
-     * =========================================================
-     */
-    public int getCandleCount(
+    private void validateRequest(
             String instrumentKey,
             String timeframe) {
 
-        return marketCandleCache.getCandleCount(
-                instrumentKey,
-                timeframe
-        );
+        if (instrumentKey == null
+                || instrumentKey.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Instrument key must not be null or blank"
+            );
+        }
+
+        if (timeframe == null
+                || timeframe.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Timeframe must not be null or blank"
+            );
+        }
     }
 }
