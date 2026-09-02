@@ -22,6 +22,7 @@ public class HistoricalDataService {
 
     private final MarketCandlePersistenceService persistenceService;
 
+
     public HistoricalDataService(
             UpstoxHistoricalDataClient historicalDataClient,
             UpstoxHistoricalCandleMapper historicalCandleMapper,
@@ -41,11 +42,13 @@ public class HistoricalDataService {
                 persistenceService;
     }
 
+
     /*
      * =========================================================
      * FIND LATEST CANDLE
      * =========================================================
      */
+
     @Transactional(readOnly = true)
     public Optional<MarketCandle> findLatestCandle(
             String instrumentKey,
@@ -57,11 +60,13 @@ public class HistoricalDataService {
         );
     }
 
+
     /*
      * =========================================================
      * CHECK HISTORICAL DATA
      * =========================================================
      */
+
     @Transactional(readOnly = true)
     public boolean hasHistoricalData(
             String instrumentKey,
@@ -73,11 +78,13 @@ public class HistoricalDataService {
         ).isPresent();
     }
 
+
     /*
      * =========================================================
      * GET DATABASE CANDLE COUNT
      * =========================================================
      */
+
     @Transactional(readOnly = true)
     public long getCandleCount(
             String instrumentKey,
@@ -89,11 +96,13 @@ public class HistoricalDataService {
         );
     }
 
+
     /*
      * =========================================================
      * GET CACHE CANDLE COUNT
      * =========================================================
      */
+
     public int getCachedCandleCount(
             String instrumentKey,
             String timeframe) {
@@ -104,11 +113,13 @@ public class HistoricalDataService {
         );
     }
 
+
     /*
      * =========================================================
      * LOAD HISTORICAL DATA
      * =========================================================
      */
+
     public void loadHistoricalData(
             String instrumentKey,
             String timeframe,
@@ -143,6 +154,7 @@ public class HistoricalDataService {
                 request.interval()
         );
 
+
         /*
          * =====================================================
          * FETCH
@@ -155,6 +167,7 @@ public class HistoricalDataService {
          *
          * in this client implementation.
          */
+
         String response =
                 historicalDataClient.getHistoricalCandles(
                         instrumentKey,
@@ -176,11 +189,13 @@ public class HistoricalDataService {
             return;
         }
 
+
         /*
          * =====================================================
          * MAP
          * =====================================================
          */
+
         List<MarketCandle> candles =
                 historicalCandleMapper.toMarketCandles(
                         instrumentKey,
@@ -202,6 +217,7 @@ public class HistoricalDataService {
             return;
         }
 
+
         log.info(
                 "Historical chunk received: instrument={}, timeframe={}, from={}, to={}, count={}",
                 instrumentKey,
@@ -211,11 +227,13 @@ public class HistoricalDataService {
                 candles.size()
         );
 
+
         /*
          * =====================================================
          * SAVE + CACHE
          * =====================================================
          */
+
         marketCandleService.processHistoricalCandles(
                 candles
         );
@@ -227,6 +245,7 @@ public class HistoricalDataService {
                 candles.size()
         );
 
+
         log.info(
                 "Cache verification after historical load: instrument={}, timeframe={}, cacheCount={}",
                 instrumentKey,
@@ -237,12 +256,14 @@ public class HistoricalDataService {
                 )
         );
 
+
         log.info(
                 "Historical data loading completed: instrument={}, timeframe={}",
                 instrumentKey,
                 timeframe
         );
     }
+
 
     /*
      * =========================================================
@@ -262,6 +283,7 @@ public class HistoricalDataService {
      * The initializer expects the number of candles loaded
      * to be returned.
      */
+
     @Transactional(readOnly = true)
     public int loadLatestCandlesIntoCache(
             String instrumentKey,
@@ -294,6 +316,7 @@ public class HistoricalDataService {
             return 0;
         }
 
+
         List<MarketCandle> candles =
                 persistenceService.findLatestCandles(
                         instrumentKey,
@@ -313,6 +336,7 @@ public class HistoricalDataService {
             return 0;
         }
 
+
         /*
          * findLatestCandles() already returns:
          *
@@ -320,9 +344,11 @@ public class HistoricalDataService {
          *
          * This is exactly what we want.
          */
+
         marketCandleService.processHistoricalCandles(
                 candles
         );
+
 
         int cacheCount =
                 getCachedCandleCount(
@@ -341,11 +367,13 @@ public class HistoricalDataService {
         return candles.size();
     }
 
+
     /*
      * =========================================================
      * RESOLVE HISTORICAL REQUEST
      * =========================================================
      */
+
     private HistoricalRequest resolveHistoricalRequest(
             String timeframe) {
 
@@ -395,11 +423,13 @@ public class HistoricalDataService {
         };
     }
 
+
     /*
      * =========================================================
      * VALIDATION
      * =========================================================
      */
+
     private void validateRequest(
             String instrumentKey,
             String timeframe,
@@ -439,11 +469,113 @@ public class HistoricalDataService {
         }
     }
 
+
+    /*
+     * =========================================================
+     * LOAD TODAY'S INTRADAY I1 CANDLES
+     * =========================================================
+     *
+     * Loads today's 1-minute candles directly from the
+     * Upstox intraday API.
+     *
+     * Upstox
+     *     ↓
+     * mapper
+     *     ↓
+     * MarketCandle
+     *     ↓
+     * cache + DB
+     *
+     * This is intentionally separate from
+     * loadHistoricalData(), because historical
+     * initialization stops at yesterday.
+     */
+
+    public List<MarketCandle> loadTodayIntradayCandles(
+            String instrumentKey) {
+
+        if (instrumentKey == null
+                || instrumentKey.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Instrument key must not be null or blank"
+            );
+        }
+
+        log.info(
+                "Loading today's intraday I1 candles: instrument={}",
+                instrumentKey
+        );
+
+
+        String response =
+                historicalDataClient.getIntradayCandles(
+                        instrumentKey,
+                        1
+                );
+
+        if (response == null
+                || response.isBlank()) {
+
+            log.warn(
+                    "No today's intraday response: instrument={}",
+                    instrumentKey
+            );
+
+            return List.of();
+        }
+
+
+        List<MarketCandle> candles =
+                historicalCandleMapper.toMarketCandles(
+                        instrumentKey,
+                        "I1",
+                        response
+                );
+
+        if (candles == null
+                || candles.isEmpty()) {
+
+            log.warn(
+                    "No today's I1 candles mapped: instrument={}",
+                    instrumentKey
+            );
+
+            return List.of();
+        }
+
+
+        /*
+         * Store today's I1 candles in DB and cache.
+         *
+         * processHistoricalCandles() is safe here because
+         * these candles are retrieved through the historical/
+         * intraday REST API rather than the live WebSocket.
+         */
+
+        marketCandleService.processHistoricalCandles(
+                candles
+        );
+
+
+        log.info(
+                "Today's intraday I1 candles loaded: instrument={}, count={}, first={}, last={}",
+                instrumentKey,
+                candles.size(),
+                candles.get(0).timestamp(),
+                candles.get(candles.size() - 1).timestamp()
+        );
+
+        return candles;
+    }
+
+
     /*
      * =========================================================
      * INTERNAL REQUEST
      * =========================================================
      */
+
     private record HistoricalRequest(
             String unit,
             int interval) {

@@ -3,86 +3,120 @@ package com.Dashboard.myTradingPlatform.market.initializer;
 import com.Dashboard.myTradingPlatform.market.analytics.model.MarketInstrument;
 import com.Dashboard.myTradingPlatform.market.repository.MarketInstrumentRepository;
 import com.Dashboard.myTradingPlatform.market.event.MarketInstrumentEntity;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
-import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
 @Slf4j
-@Order(0)
 public class MarketInstrumentInitializer {
 
     private final MarketInstrumentRepository repository;
 
     public MarketInstrumentInitializer(
             MarketInstrumentRepository repository) {
-
         this.repository = repository;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
+    @PostConstruct
     public void initializeInstruments() {
 
         log.info("Starting market instrument initialization");
 
-        List<MarketInstrument> instruments = List.of(
+        /*
+         * Disable previously configured instruments.
+         *
+         * Current application should use only:
+         * NSE_INDEX|Nifty 50
+         */
+        List<MarketInstrumentEntity> existingInstruments =
+                repository.findAll();
 
+        for (MarketInstrumentEntity entity : existingInstruments) {
+
+            if (entity.isEnabled()) {
+                entity.setEnabled(false);
+
+                log.info(
+                        "Disabled previous instrument: {}",
+                        entity.getInstrumentKey()
+                );
+            }
+        }
+
+        repository.saveAll(existingInstruments);
+
+        /*
+         * NIFTY 50
+         */
+        MarketInstrument nifty50 =
                 new MarketInstrument(
-                        "NSE_EQ|INE002A01018",
-                        "Reliance",
+                        "NSE_INDEX|Nifty 50",
+                        "NIFTY 50",
                         "NSE",
                         true
-                ),
-
-                new MarketInstrument(
-                        "GLOBAL_INDEX|SGX NIFTY",
-                        "SGX NIFTY",
-                        "GLOBAL",
-                        true
-                )
-        );
-
-        for (MarketInstrument instrument : instruments) {
-
-            if (repository.existsByInstrumentKey(
-                    instrument.instrumentKey())) {
-
-                log.debug(
-                        "Instrument already exists: {}",
-                        instrument.instrumentKey()
                 );
 
-                continue;
-            }
+        List<MarketInstrumentEntity> matchingInstruments =
+                repository.findAll()
+                        .stream()
+                        .filter(entity ->
+                                entity.getInstrumentKey()
+                                        .equals(nifty50.instrumentKey()))
+                        .toList();
+
+        if (!matchingInstruments.isEmpty()) {
 
             MarketInstrumentEntity entity =
-                    new MarketInstrumentEntity();
-
-            entity.setInstrumentKey(
-                    instrument.instrumentKey()
-            );
+                    matchingInstruments.get(0);
 
             entity.setDisplayName(
-                    instrument.displayName()
+                    nifty50.displayName()
             );
 
             entity.setExchange(
-                    instrument.exchange()
+                    nifty50.exchange()
             );
 
             entity.setEnabled(
-                    instrument.enabled()
+                    nifty50.enabled()
             );
 
             repository.save(entity);
 
             log.info(
-                    "Instrument added: {}",
-                    instrument.instrumentKey()
+                    "NIFTY 50 instrument enabled: {}",
+                    nifty50.instrumentKey()
+            );
+
+        } else {
+
+            MarketInstrumentEntity entity =
+                    new MarketInstrumentEntity();
+
+            entity.setInstrumentKey(
+                    nifty50.instrumentKey()
+            );
+
+            entity.setDisplayName(
+                    nifty50.displayName()
+            );
+
+            entity.setExchange(
+                    nifty50.exchange()
+            );
+
+            entity.setEnabled(
+                    nifty50.enabled()
+            );
+
+            repository.save(entity);
+
+            log.info(
+                    "NIFTY 50 instrument added: {}",
+                    nifty50.instrumentKey()
             );
         }
 

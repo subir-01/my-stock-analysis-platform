@@ -1,9 +1,11 @@
 package com.Dashboard.myTradingPlatform.market.analytics.service;
 
+import com.Dashboard.myTradingPlatform.market.analytics.calculator.LiquidityCalculator;
 import com.Dashboard.myTradingPlatform.market.analytics.calculator.MarketStateCalculator;
 import com.Dashboard.myTradingPlatform.market.analytics.calculator.PriceActionCalculator;
 import com.Dashboard.myTradingPlatform.market.analytics.calculator.VolumeCalculator;
 import com.Dashboard.myTradingPlatform.market.analytics.model.CandlePatternAnalysis;
+import com.Dashboard.myTradingPlatform.market.analytics.model.LiquidityAnalysis;
 import com.Dashboard.myTradingPlatform.market.analytics.model.MarketAnalysis;
 import com.Dashboard.myTradingPlatform.market.analytics.model.MarketState;
 import com.Dashboard.myTradingPlatform.market.analytics.model.MultiTimeframeAnalysis;
@@ -42,6 +44,8 @@ public class MultiTimeframeAnalysisService {
 
     private final VolumeCalculator volumeCalculator;
 
+    private final LiquidityCalculator liquidityCalculator;
+
     private final MarketCandleCache marketCandleCache;
 
     public MultiTimeframeAnalysisService(
@@ -50,6 +54,7 @@ public class MultiTimeframeAnalysisService {
             MarketStateCalculator marketStateCalculator,
             PriceActionCalculator priceActionCalculator,
             VolumeCalculator volumeCalculator,
+            LiquidityCalculator liquidityCalculator,
             MarketCandleCache marketCandleCache) {
 
         this.marketAnalyticsService =
@@ -66,6 +71,9 @@ public class MultiTimeframeAnalysisService {
 
         this.volumeCalculator =
                 volumeCalculator;
+
+        this.liquidityCalculator =
+                liquidityCalculator;
 
         this.marketCandleCache =
                 marketCandleCache;
@@ -97,7 +105,6 @@ public class MultiTimeframeAnalysisService {
                     );
 
             if (analysis == null) {
-
                 continue;
             }
 
@@ -142,7 +149,12 @@ public class MultiTimeframeAnalysisService {
 
             /*
              * =================================================
-             * GET RECENT CANDLES
+             * RECENT CANDLES
+             *
+             * Used for:
+             * - Price Action
+             * - Volume
+             *
              * =================================================
              */
             List<MarketCandle> candles =
@@ -176,6 +188,27 @@ public class MultiTimeframeAnalysisService {
 
             /*
              * =================================================
+             * LIQUIDITY
+             *
+             * Liquidity requires a larger historical
+             * window than price action.
+             *
+             * =================================================
+             */
+            List<MarketCandle> liquidityCandles =
+                    marketCandleCache.getLastCandles(
+                            instrumentKey,
+                            timeframe,
+                            200
+                    );
+
+            LiquidityAnalysis liquidity =
+                    liquidityCalculator.calculate(
+                            liquidityCandles
+                    );
+
+            /*
+             * =================================================
              * BUILD TIMEFRAME ANALYSIS
              * =================================================
              */
@@ -188,7 +221,8 @@ public class MultiTimeframeAnalysisService {
                             candlePattern,
                             marketState,
                             priceAction,
-                            volumeAnalysis
+                            volumeAnalysis,
+                            liquidity
                     )
             );
         }

@@ -16,7 +16,9 @@ public record TimeframeAnalysis(
 
         PriceActionAnalysis priceAction,
 
-        VolumeAnalysis volumeAnalysis
+        VolumeAnalysis volumeAnalysis,
+
+        LiquidityAnalysis liquidity
 
 ) {
 }

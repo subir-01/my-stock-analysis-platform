@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class MarketSignalController {
 
     private static final String DEFAULT_INSTRUMENT_KEY =
-            "NSE_EQ|INE002A01018";
+            "NSE_INDEX|Nifty 50";
 
     private final MultiTimeframeAnalysisService
             multiTimeframeAnalysisService;

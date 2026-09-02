@@ -19,26 +19,24 @@ public class InstrumentSubscriptionService {
     @PostConstruct
     public void initialize() {
 
+        /*
+         * Primary market instrument for analysis.
+         *
+         * Upstox instrument key:
+         * NSE_INDEX|Nifty 50
+         */
         addInstrument(
                 new Instrument(
-                        "NSE_EQ|INE002A01018",
-                        "RELIANCE",
+                        "NSE_INDEX|Nifty 50",
+                        "NIFTY 50",
                         "NSE",
-                        "EQUITY"
-                )
-        );
-
-        addInstrument(
-                new Instrument(
-                        "GLOBAL_INDEX|SGX NIFTY",
-                        "GIFT NIFTY",
-                        "GLOBAL",
                         "INDEX"
                 )
         );
     }
 
     public void addInstrument(Instrument instrument) {
+
         instruments.put(
                 instrument.instrumentKey(),
                 instrument
@@ -53,10 +51,12 @@ public class InstrumentSubscriptionService {
     }
 
     public void removeInstrument(String instrumentKey) {
+
         Instrument removed =
                 instruments.remove(instrumentKey);
 
         if (removed != null) {
+
             log.info(
                     "Instrument removed: symbol={}, key={}",
                     removed.symbol(),

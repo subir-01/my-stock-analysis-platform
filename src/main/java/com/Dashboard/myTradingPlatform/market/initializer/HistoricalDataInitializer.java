@@ -1,6 +1,8 @@
 package com.Dashboard.myTradingPlatform.market.initializer;
 
 import com.Dashboard.myTradingPlatform.market.analytics.model.MarketInstrument;
+import com.Dashboard.myTradingPlatform.market.model.MarketCandle;
+import com.Dashboard.myTradingPlatform.market.service.CandleAggregationService;
 import com.Dashboard.myTradingPlatform.market.service.HistoricalDataService;
 import com.Dashboard.myTradingPlatform.market.service.MarketInstrumentService;
 import lombok.extern.slf4j.Slf4j;
@@ -16,8 +18,13 @@ import java.util.List;
 public class HistoricalDataInitializer {
 
     private final HistoricalDataService historicalDataService;
+
     private final MarketInstrumentService marketInstrumentService;
+
     private final MarketDataInitializationState initializationState;
+
+    private final CandleAggregationService candleAggregationService;
+
 
     /*
      * =========================================================
@@ -29,9 +36,11 @@ public class HistoricalDataInitializer {
      * We keep a larger database history so that future
      * analytics can be added without downloading again.
      */
+
     private static final long MIN_INTRADAY_CANDLES = 500;
 
     private static final long MIN_DAILY_CANDLES = 100;
+
 
     /*
      * =========================================================
@@ -40,24 +49,29 @@ public class HistoricalDataInitializer {
      *
      * MarketAnalyticsService currently analyzes 100 candles.
      *
-     * Therefore we restore the latest 100 candles into memory.
+     * Therefore we restore the latest 200 candles into memory.
      */
+
     private static final int CACHE_CANDLE_COUNT = 200;
+
 
     /*
      * =========================================================
      * HISTORICAL LOOKBACK
      * =========================================================
      */
+
     private static final int INTRADAY_LOOKBACK_DAYS = 30;
 
     private static final int DAILY_LOOKBACK_DAYS = 180;
+
 
     /*
      * =========================================================
      * REQUIRED TIMEFRAMES
      * =========================================================
      */
+
     private static final List<String> TIMEFRAMES =
             List.of(
                     "I1",
@@ -66,15 +80,18 @@ public class HistoricalDataInitializer {
                     "1d"
             );
 
+
     /*
      * =========================================================
      * CONSTRUCTOR
      * =========================================================
      */
+
     public HistoricalDataInitializer(
             HistoricalDataService historicalDataService,
             MarketInstrumentService marketInstrumentService,
-            MarketDataInitializationState initializationState) {
+            MarketDataInitializationState initializationState,
+            CandleAggregationService candleAggregationService) {
 
         this.historicalDataService =
                 historicalDataService;
@@ -84,13 +101,18 @@ public class HistoricalDataInitializer {
 
         this.initializationState =
                 initializationState;
+
+        this.candleAggregationService =
+                candleAggregationService;
     }
+
 
     /*
      * =========================================================
      * APPLICATION READY
      * =========================================================
      */
+
     @EventListener(ApplicationReadyEvent.class)
     public void loadHistoricalData() {
 
@@ -108,6 +130,7 @@ public class HistoricalDataInitializer {
                 "========================================================="
         );
 
+
         List<MarketInstrument> instruments =
                 marketInstrumentService.getEnabledInstruments();
 
@@ -121,24 +144,29 @@ public class HistoricalDataInitializer {
             return;
         }
 
+
         log.info(
                 "Enabled instruments found: {}",
                 instruments.size()
         );
 
+
         boolean allSuccessful = true;
+
 
         /*
          * =====================================================
          * PROCESS ALL INSTRUMENTS
          * =====================================================
          */
+
         for (MarketInstrument instrument :
                 instruments) {
 
             if (instrument == null) {
                 continue;
             }
+
 
             String instrumentKey =
                     instrument.instrumentKey();
@@ -155,16 +183,19 @@ public class HistoricalDataInitializer {
                 continue;
             }
 
+
             log.info(
                     "Initializing instrument: {}",
                     instrumentKey
             );
 
+
             /*
              * =================================================
-             * PROCESS ALL TIMEFRAMES
+             * PROCESS HISTORICAL TIMEFRAMES
              * =================================================
              */
+
             for (String timeframe : TIMEFRAMES) {
 
                 boolean success =
@@ -178,13 +209,32 @@ public class HistoricalDataInitializer {
                     allSuccessful = false;
                 }
             }
+
+
+            /*
+             * =================================================
+             * LOAD TODAY'S I1 DATA
+             * =================================================
+             *
+             * Historical data intentionally stops at yesterday.
+             *
+             * Therefore we separately load today's I1 candles
+             * and use them to reconstruct the current I5/I15
+             * aggregation buckets.
+             */
+
+            initializeTodayIntradayData(
+                    instrumentKey
+            );
         }
+
 
         /*
          * =====================================================
          * FINAL STATUS
          * =====================================================
          */
+
         if (allSuccessful) {
 
             initializationState.markInitialized();
@@ -195,6 +245,10 @@ public class HistoricalDataInitializer {
 
             log.info(
                     "Historical market data initialization completed successfully"
+            );
+
+            log.info(
+                    "Today's intraday aggregation state initialized"
             );
 
             log.info(
@@ -216,6 +270,10 @@ public class HistoricalDataInitializer {
             );
 
             log.warn(
+                    "Today's intraday aggregation was attempted"
+            );
+
+            log.warn(
                     "Analytics is NOT fully READY"
             );
 
@@ -225,11 +283,13 @@ public class HistoricalDataInitializer {
         }
     }
 
+
     /*
      * =========================================================
      * LOAD ONE TIMEFRAME
      * =========================================================
      */
+
     private boolean loadTimeframe(
             String instrumentKey,
             String timeframe) {
@@ -241,32 +301,38 @@ public class HistoricalDataInitializer {
              * REQUIRED DATABASE CANDLE COUNT
              * =================================================
              */
+
             long minimumRequired =
                     getMinimumRequiredCandles(
                             timeframe
                     );
+
 
             /*
              * =================================================
              * CURRENT DATABASE COUNT
              * =================================================
              */
+
             long existingCount =
                     historicalDataService.getCandleCount(
                             instrumentKey,
                             timeframe
                     );
 
+
             /*
              * =================================================
              * CURRENT CACHE COUNT
              * =================================================
              */
+
             int existingCacheCount =
                     historicalDataService.getCachedCandleCount(
                             instrumentKey,
                             timeframe
                     );
+
 
             log.info(
                     "Historical data status: instrument={}, timeframe={}, dbCandles={}, cacheCandles={}, requiredDbCandles={}",
@@ -277,11 +343,13 @@ public class HistoricalDataInitializer {
                     minimumRequired
             );
 
+
             /*
              * =================================================
              * DATABASE ALREADY HAS ENOUGH DATA
              * =================================================
              */
+
             if (existingCount >= minimumRequired) {
 
                 log.info(
@@ -291,17 +359,17 @@ public class HistoricalDataInitializer {
                         existingCount
                 );
 
+
                 /*
                  * =================================================
                  * RESTORE DB -> CACHE
                  * =================================================
                  *
-                 * This is critical.
-                 *
-                 * Even if DB has 5000 candles, analytics cannot
-                 * use them unless the latest candles are available
-                 * in MarketCandleCache.
+                 * Even if DB has thousands of candles, analytics
+                 * cannot use them unless the latest candles are
+                 * available in MarketCandleCache.
                  */
+
                 int loaded =
                         historicalDataService.loadLatestCandlesIntoCache(
                                 instrumentKey,
@@ -309,11 +377,13 @@ public class HistoricalDataInitializer {
                                 CACHE_CANDLE_COUNT
                         );
 
+
                 int finalCacheCount =
                         historicalDataService.getCachedCandleCount(
                                 instrumentKey,
                                 timeframe
                         );
+
 
                 log.info(
                         "Historical cache restoration completed: instrument={}, timeframe={}, loaded={}, cacheCandles={}",
@@ -323,10 +393,12 @@ public class HistoricalDataInitializer {
                         finalCacheCount
                 );
 
+
                 /*
                  * We only need enough candles in cache for
                  * analytics.
                  */
+
                 if (finalCacheCount < CACHE_CANDLE_COUNT) {
 
                     log.warn(
@@ -338,10 +410,11 @@ public class HistoricalDataInitializer {
                     );
                 }
 
+
                 /*
-                 * At minimum we need enough candles to calculate
-                 * EMA50.
+                 * EMA50 requires at least 50 candles.
                  */
+
                 if (finalCacheCount < 50) {
 
                     log.error(
@@ -354,14 +427,17 @@ public class HistoricalDataInitializer {
                     return false;
                 }
 
+
                 return true;
             }
+
 
             /*
              * =================================================
              * DATABASE DOES NOT HAVE ENOUGH DATA
              * =================================================
              */
+
             log.info(
                     "Insufficient historical data. Downloading more: instrument={}, timeframe={}, existing={}, required={}",
                     instrumentKey,
@@ -370,15 +446,18 @@ public class HistoricalDataInitializer {
                     minimumRequired
             );
 
+
             /*
              * =================================================
              * DETERMINE LOOKBACK
              * =================================================
              */
+
             int lookbackDays =
                     getLookbackDays(
                             timeframe
                     );
+
 
             /*
              * We download until yesterday.
@@ -386,6 +465,7 @@ public class HistoricalDataInitializer {
              * This avoids downloading an incomplete current
              * trading day through the historical API.
              */
+
             LocalDate toDate =
                     LocalDate.now()
                             .minusDays(1);
@@ -395,6 +475,7 @@ public class HistoricalDataInitializer {
                             lookbackDays
                     );
 
+
             log.info(
                     "Historical download date range: instrument={}, timeframe={}, from={}, to={}",
                     instrumentKey,
@@ -403,11 +484,13 @@ public class HistoricalDataInitializer {
                     toDate
             );
 
+
             /*
              * =================================================
              * DOWNLOAD HISTORICAL DATA
              * =================================================
              */
+
             historicalDataService.loadHistoricalData(
                     instrumentKey,
                     timeframe,
@@ -415,16 +498,19 @@ public class HistoricalDataInitializer {
                     toDate.toString()
             );
 
+
             /*
              * =================================================
              * VERIFY DATABASE
              * =================================================
              */
+
             long finalDbCount =
                     historicalDataService.getCandleCount(
                             instrumentKey,
                             timeframe
                     );
+
 
             log.info(
                     "Historical DB verification: instrument={}, timeframe={}, candlesAfterDownload={}, required={}",
@@ -433,6 +519,7 @@ public class HistoricalDataInitializer {
                     finalDbCount,
                     minimumRequired
             );
+
 
             if (finalDbCount < minimumRequired) {
 
@@ -447,6 +534,7 @@ public class HistoricalDataInitializer {
                 return false;
             }
 
+
             /*
              * =================================================
              * EXPLICIT DB -> CACHE RESTORATION
@@ -455,9 +543,10 @@ public class HistoricalDataInitializer {
              * Do this even if loadHistoricalData() already
              * populated the cache.
              *
-             * This guarantees that the latest 100 DB candles
+             * This guarantees that the latest 200 DB candles
              * are available to MarketAnalyticsService.
              */
+
             int loaded =
                     historicalDataService.loadLatestCandlesIntoCache(
                             instrumentKey,
@@ -465,16 +554,19 @@ public class HistoricalDataInitializer {
                             CACHE_CANDLE_COUNT
                     );
 
+
             /*
              * =================================================
              * VERIFY CACHE
              * =================================================
              */
+
             int finalCacheCount =
                     historicalDataService.getCachedCandleCount(
                             instrumentKey,
                             timeframe
                     );
+
 
             log.info(
                     "Historical cache verification: instrument={}, timeframe={}, loaded={}, cacheCandles={}, requiredForAnalytics=50",
@@ -484,9 +576,11 @@ public class HistoricalDataInitializer {
                     finalCacheCount
             );
 
+
             /*
              * EMA50 requires at least 50 candles.
              */
+
             if (finalCacheCount < 50) {
 
                 log.error(
@@ -499,11 +593,13 @@ public class HistoricalDataInitializer {
                 return false;
             }
 
+
             /*
              * =================================================
              * SUCCESS
              * =================================================
              */
+
             log.info(
                     "Historical data initialized successfully: instrument={}, timeframe={}, dbCandles={}, cacheCandles={}",
                     instrumentKey,
@@ -513,6 +609,7 @@ public class HistoricalDataInitializer {
             );
 
             return true;
+
 
         } catch (Exception e) {
 
@@ -527,11 +624,13 @@ public class HistoricalDataInitializer {
         }
     }
 
+
     /*
      * =========================================================
      * MINIMUM DATABASE CANDLES
      * =========================================================
      */
+
     private long getMinimumRequiredCandles(
             String timeframe) {
 
@@ -559,11 +658,13 @@ public class HistoricalDataInitializer {
         };
     }
 
+
     /*
      * =========================================================
      * HISTORICAL LOOKBACK DAYS
      * =========================================================
      */
+
     private int getLookbackDays(
             String timeframe) {
 
@@ -589,5 +690,158 @@ public class HistoricalDataInitializer {
             default ->
                     INTRADAY_LOOKBACK_DAYS;
         };
+    }
+
+
+    /*
+     * =========================================================
+     * INITIALIZE TODAY'S INTRADAY DATA
+     * =========================================================
+     *
+     * Historical initialization stops at yesterday.
+     *
+     * Today's I1 candles are loaded separately from the
+     * Upstox intraday endpoint.
+     *
+     * Those candles are then passed through the exact same
+     * CandleAggregationService used by the live WebSocket.
+     *
+     * This allows the aggregation service to reconstruct
+     * the current I5 and I15 buckets before live data arrives.
+     */
+
+    private void initializeTodayIntradayData(
+            String instrumentKey) {
+
+        try {
+
+            log.info(
+                    "========================================================="
+            );
+
+            log.info(
+                    "Loading today's intraday I1 data: instrument={}",
+                    instrumentKey
+            );
+
+            log.info(
+                    "========================================================="
+            );
+
+
+            List<MarketCandle> todayCandles =
+                    historicalDataService.loadTodayIntradayCandles(
+                            instrumentKey
+                    );
+
+
+            if (todayCandles == null
+                    || todayCandles.isEmpty()) {
+
+                log.warn(
+                        "No today's intraday candles available: instrument={}",
+                        instrumentKey
+                );
+
+                return;
+            }
+
+
+            /*
+             * =================================================
+             * FEED TODAY'S I1 CANDLES INTO AGGREGATION
+             * =================================================
+             *
+             * Process candles in chronological order.
+             *
+             * CandleAggregationService internally keeps the
+             * I5 and I15 buckets for this instrument.
+             */
+
+            for (MarketCandle candle :
+                    todayCandles) {
+
+                if (candle == null) {
+                    continue;
+                }
+
+                candleAggregationService.processI1Candle(
+                        candle
+                );
+            }
+
+
+            log.info(
+                    "Today's I1 aggregation state initialized: instrument={}, candles={}",
+                    instrumentKey,
+                    todayCandles.size()
+            );
+
+
+            /*
+             * =================================================
+             * CURRENT BUCKET COUNTS
+             * =================================================
+             *
+             * These logs help us verify that the current I5
+             * and I15 buckets have actually been reconstructed.
+             */
+
+            int currentI5Count =
+                    candleAggregationService.getCurrentI5CandleCount(
+                            instrumentKey
+                    );
+
+            int currentI15Count =
+                    candleAggregationService.getCurrentI15CandleCount(
+                            instrumentKey
+                    );
+
+
+            MarketCandle currentI5 =
+                    candleAggregationService.getCurrentI5(
+                            instrumentKey
+                    );
+
+            MarketCandle currentI15 =
+                    candleAggregationService.getCurrentI15(
+                            instrumentKey
+                    );
+
+
+            log.info(
+                    "Today's I5 aggregation state: instrument={}, I1Count={}, timestamp={}, volume={}",
+                    instrumentKey,
+                    currentI5Count,
+                    currentI5 != null
+                            ? currentI5.timestamp()
+                            : null,
+                    currentI5 != null
+                            ? currentI5.volume()
+                            : null
+            );
+
+
+            log.info(
+                    "Today's I15 aggregation state: instrument={}, I1Count={}, timestamp={}, volume={}",
+                    instrumentKey,
+                    currentI15Count,
+                    currentI15 != null
+                            ? currentI15.timestamp()
+                            : null,
+                    currentI15 != null
+                            ? currentI15.volume()
+                            : null
+            );
+
+
+        } catch (Exception e) {
+
+            log.error(
+                    "Failed to initialize today's intraday data: instrument={}",
+                    instrumentKey,
+                    e
+            );
+        }
     }
 }

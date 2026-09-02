@@ -46,6 +46,7 @@ public class UpstoxHistoricalDataClient {
         );
     }
 
+
     /*
      * =========================================================
      * GET HISTORICAL CANDLES
@@ -147,11 +148,109 @@ public class UpstoxHistoricalDataClient {
         }
     }
 
+
+    /*
+     * =========================================================
+     * GET TODAY'S INTRADAY CANDLES
+     * =========================================================
+     *
+     * Upstox endpoint:
+     *
+     * /v3/historical-candle/intraday/{instrumentKey}/minutes/{interval}
+     *
+     * This endpoint is used for today's intraday candles.
+     *
+     * For our application we currently use:
+     *
+     * minutes / 1
+     *
+     * to obtain today's I1 candles.
+     *
+     * Those I1 candles will later be used to reconstruct
+     * the current I5 and I15 aggregation buckets.
+     */
+    public String getIntradayCandles(
+            String instrumentKey,
+            int interval) {
+
+        if (instrumentKey == null
+                || instrumentKey.isBlank()) {
+
+            throw new IllegalArgumentException(
+                    "Instrument key must not be null or blank"
+            );
+        }
+
+        if (interval <= 0) {
+
+            throw new IllegalArgumentException(
+                    "Intraday interval must be greater than zero"
+            );
+        }
+
+        log.info(
+                "Fetching intraday candles: instrument={}, interval={}",
+                instrumentKey,
+                interval
+        );
+
+        try {
+
+            String response =
+                    restClient.get()
+                            .uri(uriBuilder ->
+                                    uriBuilder
+                                            .path(
+                                                    "/v3/historical-candle/intraday/{instrumentKey}/minutes/{interval}"
+                                            )
+                                            .build(
+                                                    instrumentKey,
+                                                    interval
+                                            )
+                            )
+                            .retrieve()
+                            .body(String.class);
+
+            if (response == null
+                    || response.isBlank()) {
+
+                log.warn(
+                        "Empty intraday API response: instrument={}, interval={}",
+                        instrumentKey,
+                        interval
+                );
+
+                return null;
+            }
+
+            log.info(
+                    "Intraday candles received: instrument={}, interval={}",
+                    instrumentKey,
+                    interval
+            );
+
+            return response;
+
+        } catch (Exception e) {
+
+            log.error(
+                    "Failed to fetch intraday candles: instrument={}, interval={}",
+                    instrumentKey,
+                    interval,
+                    e
+            );
+
+            throw e;
+        }
+    }
+
+
     /*
      * =========================================================
      * VALIDATION
      * =========================================================
      */
+
     private void validateRequest(
             String instrumentKey,
             String unit,
@@ -199,6 +298,7 @@ public class UpstoxHistoricalDataClient {
         }
     }
 
+
     /*
      * =========================================================
      * TEST HISTORICAL DATA
@@ -208,6 +308,7 @@ public class UpstoxHistoricalDataClient {
      *
      * It can be called from a test/controller if required.
      */
+
     public void testHistoricalData() {
 
         String response =
